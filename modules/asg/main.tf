@@ -45,24 +45,27 @@ resource "aws_lb_target_group" "web" {
   }
 }
 
-
 resource "aws_lb_listener" "web" {
   load_balancer_arn = aws_lb.web_alb.id
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web.id
-  }
+    type = "redirect"
 
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
 }
 
 resource "aws_lb_listener" "web_https" {
   load_balancer_arn = aws_lb.web_alb.id
   port              = 443
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   certificate_arn   = var.certificate_arn
 
   default_action {
@@ -70,6 +73,7 @@ resource "aws_lb_listener" "web_https" {
     target_group_arn = aws_lb_target_group.web.id
   }
 }
+
 # web launch template
 resource "aws_launch_template" "web" {
   name_prefix = "${terraform.workspace}_web"
@@ -86,7 +90,6 @@ resource "aws_launch_template" "web" {
     enabled = true
   }
 
-
   tag_specifications {
     resource_type = "instance"
     tags = {
@@ -99,13 +102,11 @@ resource "aws_launch_template" "web" {
 
 }
 
-
 resource "aws_autoscaling_group" "web" {
   name_prefix = "${terraform.workspace}_web"
 
   vpc_zone_identifier = var.web_private_subnets
   default_cooldown    = 60
-
 
   desired_capacity = var.desired_capacity_web
   min_size         = var.min_size_web
@@ -133,9 +134,7 @@ resource "aws_autoscaling_group" "web" {
 
 }
 
-
 # App ALB (Internal)
-
 resource "aws_lb" "app_alb" {
   name               = "app-alb"
   internal           = true
@@ -154,7 +153,6 @@ resource "aws_lb" "app_alb" {
     Tier        = "backend"
   }
 }
-
 
 resource "aws_lb_target_group" "app" {
   name     = "app"
@@ -183,7 +181,6 @@ resource "aws_lb_target_group" "app" {
   }
 }
 
-
 resource "aws_lb_listener" "app" {
   load_balancer_arn = aws_lb.app_alb.id
   port              = 80
@@ -193,10 +190,7 @@ resource "aws_lb_listener" "app" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.id
   }
-
 }
-
-# app launch template and asg
 
 # App IAM Role
 resource "aws_iam_role" "app_role" {
@@ -263,8 +257,6 @@ resource "aws_launch_template" "app" {
     name = aws_iam_instance_profile.app_profile.name
   }
 
-
-
   tag_specifications {
     resource_type = "instance"
     tags = {
@@ -274,9 +266,6 @@ resource "aws_launch_template" "app" {
       Tier        = "backend"
     }
   }
-
-
-
 }
 
 resource "aws_autoscaling_group" "app" {
@@ -308,5 +297,4 @@ resource "aws_autoscaling_group" "app" {
     value               = "app_${terraform.workspace}"
     propagate_at_launch = true
   }
-
 }
