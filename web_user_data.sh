@@ -1,33 +1,44 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "========== Updating system & installing dependencies =========="
+REPO_URL="https://github.com/ngems1/3tier-project.git"
+REPO_DIR="/home/ec2-user/3tier-project"
+
+log() {
+  echo "[$(date --iso-8601=seconds)] $*"
+}
+
+log "Updating system and installing web dependencies"
 dnf update -y
 dnf install -y nginx git
 
-echo "========== Cloning application repository =========="
-cd /home/ec2-user
-git clone https://github.com/harishnshetty/terraform-project-vpc-alb-modules-workspace.git || true
+log "Checking out application repository"
+if [ -d "${REPO_DIR}/.git" ]; then
+  git -C "${REPO_DIR}" fetch --depth 1 origin main
+  git -C "${REPO_DIR}" reset --hard origin/main
+else
+  rm -rf "${REPO_DIR}"
+  git clone --depth 1 --branch main "${REPO_URL}" "${REPO_DIR}"
+fi
 
-echo "========== Copying web.sh =========="
-cp -f /home/ec2-user/terraform-project-vpc-alb-modules-workspace/application_code/web.sh /home/ec2-user/web.sh
-chmod +x /home/ec2-user/web.sh
+log "Copying frontend build script"
+install -o ec2-user -g ec2-user -m 0755 \
+  "${REPO_DIR}/application_code/web.sh" \
+  /home/ec2-user/web.sh
 
-echo "========== Preparing nginx.conf =========="
-# Replace placeholder BEFORE moving nginx.conf into /etc
-sed -i "s|REPLACE-WITH-INTERNAL-LB-DNS|__APP_ALB_DNS__|g" \
-    /home/ec2-user/terraform-project-vpc-alb-modules-workspace/application_code/nginx.conf
+log "Preparing nginx configuration"
+# Terraform replaces __APP_ALB_DNS__ with the internal ALB DNS name before
+# this user-data script is passed to the launch template.
+install -o root -g root -m 0644 \
+  "${REPO_DIR}/application_code/nginx.conf" \
+  /etc/nginx/nginx.conf
 
-# Backup old config & apply new one
-mv /etc/nginx/nginx.conf /etc/nginx/nginx-backup.conf || true
-cp -f /home/ec2-user/terraform-project-vpc-alb-modules-workspace/application_code/nginx.conf /etc/nginx/nginx.conf
-
-echo "========== Running web.sh =========="
+log "Building frontend"
 /home/ec2-user/web.sh
 
-echo "========== Validating nginx configuration =========="
+log "Validating and starting nginx"
 nginx -t
-
-echo "========== Restarting & enabling nginx =========="
+systemctl enable --now nginx
 systemctl restart nginx
-systemctl enable nginx
+
+log "Web tier setup completed"
