@@ -1,34 +1,36 @@
 #!/bin/bash
-set -e   # exit on error
+set -euo pipefail
 
+APP_DIR="/home/ec2-user/app_files"
+ENV_FILE="/etc/profile.d/app_env.sh"
 
-# Ensure correct ownership/permissions
-sudo chown -R ec2-user:ec2-user /home/ec2-user
-sudo chmod -R 755 /home/ec2-user/app_files
-
-# Run as ec2-user so nvm/npm/pm2 are available
-su - ec2-user <<'EOF'
-# Load nvm environment
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-# Explicitly load app environment variables
-if [ -f /etc/profile.d/app_env.sh ]; then
-    source /etc/profile.d/app_env.sh
+if [ ! -f "${ENV_FILE}" ]; then
+  echo "Missing ${ENV_FILE}; SECRET_NAME and REGION are required" >&2
+  exit 1
 fi
 
-cd /home/ec2-user/app_files
+# Load the same environment used by the application bootstrap. This is
+# explicitly sourced because non-interactive/systemd shells do not load
+# /etc/profile.d automatically.
+source "${ENV_FILE}"
+: "${SECRET_NAME:?SECRET_NAME is not set}"
+: "${REGION:?REGION is not set}"
 
-# Install dependencies
-npm install @aws-sdk/client-secrets-manager mysql2
-npm install aws-sdk
-npm install
-npm audit fix || true   # don’t fail if audit fix has nothing to fix
+chown -R ec2-user:ec2-user /home/ec2-user
+chmod -R u=rwX,go=rX "${APP_DIR}"
 
-# Start app with PM2
-pm2 start index.js
+runuser -u ec2-user -- bash -lc '
+  set -euo pipefail
+  source /etc/profile.d/app_env.sh
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+  cd /home/ec2-user/app_files
+  npm install --no-audit --no-fund
+  npm install --no-save --no-audit --no-fund @aws-sdk/client-secrets-manager mysql2 pm2
+  pm2 delete three-tier-backend 2>/dev/null || true
+  pm2 start index.js --name three-tier-backend --update-env
+  pm2 save
+'
 
-# Configure PM2 startup (systemd for ec2-user)
-pm2 startup systemd -u ec2-user --hp /home/ec2-user
-pm2 save
-EOF
+# Install the PM2 systemd unit for ec2-user when supported by the AMI.
+runuser -u ec2-user -- bash -lc 'pm2 startup systemd -u ec2-user --hp /home/ec2-user 2>/dev/null || true'
