@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/ngems1/3tier-project.git"
 REPO_DIR="/home/ec2-user/3tier-project"
+APP_ALB_DNS="__APP_ALB_DNS__"
 
 log() {
   echo "[$(date --iso-8601=seconds)] $*"
@@ -27,11 +28,9 @@ install -o ec2-user -g ec2-user -m 0755 \
   /home/ec2-user/web.sh
 
 log "Preparing nginx configuration"
-# Terraform replaces __APP_ALB_DNS__ with the internal ALB DNS name before
-# this user-data script is passed to the launch template.
-install -o root -g root -m 0644 \
-  "${REPO_DIR}/application_code/nginx.conf" \
-  /etc/nginx/nginx.conf
+cp -f "${REPO_DIR}/application_code/nginx.conf" /tmp/nginx.conf
+sed -i "s|__APP_ALB_DNS__|${APP_ALB_DNS}|g" /tmp/nginx.conf
+install -o root -g root -m 0644 /tmp/nginx.conf /etc/nginx/nginx.conf
 
 log "Building frontend"
 /home/ec2-user/web.sh
