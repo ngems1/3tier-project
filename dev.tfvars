@@ -45,11 +45,9 @@ max_size_app         = 4
 
 sns_topic_arn = "arn:aws:sns:ap-south-1:970378220457:alb-sns-demo" # create your own sns topic
 
-
-hosted_zone_name = "harishshetty.xyz" # create your own hosted zone
-record_name      = "dev"
-
-
+hosted_zone_name   = "ngems.xyz" # create your own hosted zone
+record_name        = "dev"
+certificate_domain = "dev.ngems.xyz"
 
 bastion_image_id      = "ami-0c44f651ab5e9285f" # change this to your own ami id
 bastion_instance_type = "t2.micro"
