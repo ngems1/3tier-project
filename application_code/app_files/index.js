@@ -16,8 +16,8 @@ app.use(cors());
 // =======================================================
 
 //Health Checking
-app.get('/health', (req, res) => {
-    res.json("This is the health check");
+app.get('/healthz', (req, res) => {
+    res.json({ status: 'ok' });
 });
 
 // ADD TRANSACTION
@@ -106,4 +106,8 @@ const startServer = async () => {
     }
 };
 
-startServer();
+if (require.main === module) {
+    startServer();
+}
+
+module.exports = { app, startServer };
