@@ -27,7 +27,7 @@ backup_window           = "03:00-05:00"
 maintenance_window      = "sun:07:00-sun:09:00"
 
 skip_final_snapshot          = true
-deletion_protection          = false
+delete_protection            = false
 apply_immediately            = true
 performance_insights_enabled = false
 
@@ -43,16 +43,16 @@ desired_capacity_app = 2
 min_size_app         = 2
 max_size_app         = 4
 
-sns_topic_arn = "arn:aws:sns:ap-south-1:970378220457:alb-sns-demo" # create your own sns topic
+sns_topic_arn = "arn:aws:sns:ap-south-1:970378220457:alb-sns-demo"
 
-hosted_zone_name   = "ngems.xyz" # create your own hosted zone
+hosted_zone_name   = "ngems.xyz"
 record_name        = "dev"
 certificate_domain = "dev.ngems.xyz"
 
-bastion_image_id      = "ami-0c44f651ab5e9285f" # change this to your own ami id
+bastion_image_id      = "ami-0c44f651ab5e9285f"
 bastion_instance_type = "t2.micro"
 bastion_tags          = { Name = "bastion-dev" }
-bastion_key_name      = "new-keypair" # create your own key pair
+bastion_key_name      = "new-keypair"
 
 tags = {
   Project     = "vpc-alb"
