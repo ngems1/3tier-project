@@ -1,0 +1,181 @@
+name: 3-Tier Application CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Terraform environment to deploy
+        required: true
+        default: dev
+        type: choice
+        options: [dev, staging]
+      deploy:
+        description: Apply infrastructure after validation
+        required: true
+        default: false
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  TF_IN_AUTOMATION: true
+  TF_VERSION: '1.14.0'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  application-checks:
+    name: Application checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            application_code/app_files/package-lock.json
+            application_code/web_files/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: application_code/app_files
+        run: npm ci
+
+      - name: Backend smoke test
+        working-directory: application_code/app_files
+        run: npm test --if-present
+
+      - name: Install frontend dependencies
+        working-directory: application_code/web_files
+        run: npm ci
+
+      - name: Frontend build
+        working-directory: application_code/web_files
+        run: |
+          npm run build
+
+  terraform-checks:
+    name: Terraform checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          soft_fail: false
+
+  terraform-plan:
+    name: Terraform plan
+    needs: [application-checks, terraform-checks]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-south-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Select workspace
+        run: |
+          terraform workspace select "${{ inputs.environment || 'dev' }}" || \
+          terraform workspace new "${{ inputs.environment || 'dev' }}"
+
+      - name: Terraform plan
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: |
+          terraform plan \
+            -input=false \
+            -lock-timeout=5m \
+            -var-file="${{ inputs.environment || 'dev' }}.tfvars" \
+            -var="db_password=${TF_VAR_db_password}" \
+            -out=tfplan
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment || 'dev' }}
+          path: tfplan
+          retention-days: 7
+
+  terraform-apply:
+    name: Terraform apply
+    needs: terraform-plan
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-south-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Select workspace
+        run: |
+          terraform workspace select "${{ inputs.environment || 'dev' }}" || \
+          terraform workspace new "${{ inputs.environment || 'dev' }}"
+
+      - name: Terraform apply
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: |
+          terraform apply \
+            -input=false \
+            -auto-approve \
+            -var-file="${{ inputs.environment || 'dev' }}.tfvars" \
+            -var="db_password=${TF_VAR_db_password}"
