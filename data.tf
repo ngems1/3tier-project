@@ -32,13 +32,8 @@ data "aws_ami" "backend" {
   }
 }
 
-
 data "aws_acm_certificate" "selected" {
+  domain      = var.certificate_domain
   statuses    = ["ISSUED"]
   most_recent = true
-
-  tags = {
-    Domain = "ngems"
-    Name   = "ngems"
-  }
 }
