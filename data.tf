@@ -38,7 +38,7 @@ data "aws_acm_certificate" "selected" {
   most_recent = true
 
   tags = {
-    Domain = "harishshetty"
-    Name   = "harishshetty"
+    Domain = "ngems"
+    Name   = "ngems"
   }
 }
