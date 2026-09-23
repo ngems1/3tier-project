@@ -66,13 +66,6 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.frontend_alb_sg.id]
-  }
-
-  ingress {
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
@@ -90,7 +83,6 @@ resource "aws_security_group" "web_sg" {
     Name = "web_sg-${terraform.workspace}"
   }
 }
-
 
 resource "aws_security_group" "app_alb_internal_sg" {
   name        = "app_alb_sg"
@@ -147,8 +139,6 @@ resource "aws_security_group" "app_sg" {
   }
 }
 
-
-
 resource "aws_security_group" "db_sg" {
   name        = "db_sg"
   description = "Security Group for DB"
@@ -168,7 +158,6 @@ resource "aws_security_group" "db_sg" {
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
-
   ingress {
     from_port       = 3306
     to_port         = 3306
@@ -187,4 +176,3 @@ resource "aws_security_group" "db_sg" {
     Name = "db_sg-${terraform.workspace}"
   }
 }
-

@@ -55,7 +55,7 @@ variable "db_name" {
 }
 
 variable "multi_az" {
-  description = "Specifies if the RDS instance is multi-AZ"
+  description = "Specifies if the DB instance is multi-AZ"
   type        = bool
 }
 
@@ -87,25 +87,21 @@ variable "skip_final_snapshot" {
 variable "deletion_protection" {
   description = "If the DB instance should have deletion protection enabled"
   type        = bool
-
 }
 
 variable "apply_immediately" {
   description = "Specifies whether any database modifications are applied immediately, or during the next maintenance window"
   type        = bool
-
 }
 
 variable "performance_insights_enabled" {
   description = "Specifies whether Performance Insights are enabled"
   type        = bool
-
 }
 
 variable "vpc_cidr_block" {
   description = "CIDR block for the VPC"
   type        = string
-
 }
 
 variable "alb_subnet_public" {
@@ -145,6 +141,11 @@ variable "hosted_zone_name" {
 
 variable "record_name" {
   description = "The name of the record"
+  type        = string
+}
+
+variable "certificate_domain" {
+  description = "The domain name covered by the ACM certificate for HTTPS"
   type        = string
 }
 
