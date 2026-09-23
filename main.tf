@@ -52,15 +52,13 @@ module "rds" {
 module "secrets" {
   source      = "./modules/secrets"
   secret_name = "backend-db-credentials-${terraform.workspace}"
-  db_username = var.secret_username
-  db_password = var.secret_password
+  db_username = var.db_username
+  db_password = var.db_password
   db_endpoint = module.rds.db_instance_endpoint
-  db_name     = var.secret_db_name
+  db_name     = var.db_name
 
   depends_on = [module.rds]
 }
-
-
 
 module "asg" {
   source = "./modules/asg"
@@ -87,7 +85,6 @@ module "asg" {
   min_size_app         = var.min_size_app
   max_size_app         = var.max_size_app
 
-  # Using dynamic AMI from data source
   web_image_id         = data.aws_ami.frontend.id
   app_image_id         = data.aws_ami.backend.id
   web_instance_type    = var.web_instance_type
@@ -112,9 +109,7 @@ module "route53" {
   record_name      = var.record_name
   alb_dns_name     = module.asg.web_alb_dns_name
   alb_zone_id      = module.asg.web_alb_zone_id
-
 }
-
 
 module "bastion" {
   source = "./modules/bastion-server"
@@ -129,7 +124,7 @@ module "bastion" {
 
   tags = {
     Name        = "bastion-${terraform.workspace}"
-    Environment = "${terraform.workspace}"
+    Environment = terraform.workspace
     Project     = "vpc-alb"
     Tier        = "bastion"
   }

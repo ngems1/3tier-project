@@ -12,11 +12,10 @@ db_instance_class       = "db.t3.small"
 db_engine               = "mysql"
 db_engine_version       = "8.0"
 db_parameter_group_name = "default.mysql8.0"
-storage_encrypted       = false
+storage_encrypted       = true
 db_allocated_storage    = 20
 db_storage_type         = "gp3"
 db_username             = "admin"
-db_password             = "password" # NOTE: Consider using a safer way to pass secrets
 db_name                 = "webappdb"
 
 multi_az            = true
@@ -30,10 +29,6 @@ skip_final_snapshot          = true
 delete_protection            = false
 apply_immediately            = true
 performance_insights_enabled = false
-
-secret_username = "admin"
-secret_password = "password"
-secret_db_name  = "webappdb"
 
 desired_capacity_web = 1
 min_size_web         = 1
