@@ -27,7 +27,7 @@ backup_window           = "03:00-05:00"
 maintenance_window      = "sun:07:00-sun:09:00"
 
 skip_final_snapshot          = true
-delete_protection            = false
+deletion_protection          = false
 apply_immediately            = true
 performance_insights_enabled = false
 

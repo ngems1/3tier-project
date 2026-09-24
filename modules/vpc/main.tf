@@ -9,6 +9,71 @@ resource "aws_vpc" "main" {
   }
 }
 
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "default_sg_${terraform.workspace}"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  name              = "/aws/vpc/flow-logs/${terraform.workspace}"
+  retention_in_days = 30
+
+  tags = {
+    Name = "vpc_flow_logs_${terraform.workspace}"
+  }
+}
+
+data "aws_iam_policy_document" "flow_logs_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "flow_logs" {
+  name               = "vpc_flow_logs_${terraform.workspace}"
+  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume_role.json
+}
+
+data "aws_iam_policy_document" "flow_logs" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+      "logs:PutLogEvents",
+    ]
+    resources = [
+      aws_cloudwatch_log_group.vpc_flow_logs.arn,
+      "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "flow_logs" {
+  name   = "vpc_flow_logs_${terraform.workspace}"
+  role   = aws_iam_role.flow_logs.id
+  policy = data.aws_iam_policy_document.flow_logs.json
+}
+
+resource "aws_flow_log" "vpc" {
+  iam_role_arn         = aws_iam_role.flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
+  log_destination_type = "cloud-watch-logs"
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -168,5 +233,4 @@ resource "aws_route" "db_rt_ass_private" {
 
   depends_on = [aws_eip.nat]
 }
-
 

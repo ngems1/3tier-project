@@ -26,7 +26,7 @@ runuser -u ec2-user -- bash -lc '
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
   cd /home/ec2-user/app_files
   npm install --no-audit --no-fund
-  npm install --no-save --no-audit --no-fund @aws-sdk/client-secrets-manager mysql2 pm2
+  npm install --no-save --no-audit --no-fund pm2
   pm2 delete three-tier-backend 2>/dev/null || true
   pm2 start index.js --name three-tier-backend --update-env
   pm2 save

@@ -46,6 +46,8 @@ module "rds" {
   apply_immediately            = var.apply_immediately
   performance_insights_enabled = var.performance_insights_enabled
 
+  sns_topic_arn = var.sns_topic_arn
+
   depends_on = [module.vpc]
 }
 
@@ -88,11 +90,13 @@ module "asg" {
   max_size_app         = var.max_size_app
 
   # Using dynamic AMI from data source
-  web_image_id         = data.aws_ami.frontend.id
-  app_image_id         = data.aws_ami.backend.id
-  web_instance_type    = var.web_instance_type
-  app_instance_type    = var.app_instance_type
-  web_user_data_base64 = base64encode(file("web_user_data.sh"))
+  web_image_id      = data.aws_ami.frontend.id
+  app_image_id      = data.aws_ami.backend.id
+  web_instance_type = var.web_instance_type
+  app_instance_type = var.app_instance_type
+  web_user_data_base64 = base64encode(templatefile("web_user_data.sh", {
+    environment = terraform.workspace
+  }))
   app_user_data_base64 = base64encode(templatefile("app_user_data.sh", {
     region       = var.region
     secret_name  = module.secrets.secret_name
@@ -102,6 +106,8 @@ module "asg" {
 
   secret_arn    = module.secrets.secret_arn
   sns_topic_arn = var.sns_topic_arn
+
+  log_retention_days = var.log_retention_days
 
   depends_on = [module.secrets]
 }

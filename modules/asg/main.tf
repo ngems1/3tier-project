@@ -18,6 +18,48 @@ resource "aws_lb" "web_alb" {
   }
 }
 
+resource "aws_wafv2_web_acl" "web" {
+  name  = "web-alb-${terraform.workspace}"
+  scope = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "web-alb-common-rules-${terraform.workspace}"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "web-alb-${terraform.workspace}"
+    sampled_requests_enabled   = true
+  }
+}
+
+resource "aws_wafv2_web_acl_association" "web" {
+  resource_arn = aws_lb.web_alb.arn
+  web_acl_arn  = aws_wafv2_web_acl.web.arn
+}
+
 resource "aws_lb_target_group" "web" {
   name     = "web"
   port     = 80
@@ -90,6 +132,10 @@ resource "aws_launch_template" "web" {
     enabled = true
   }
 
+  iam_instance_profile {
+    name = aws_iam_instance_profile.web_profile.name
+  }
+
   tag_specifications {
     resource_type = "instance"
     tags = {
@@ -155,6 +201,7 @@ resource "aws_lb" "app_alb" {
 }
 
 resource "aws_lb_target_group" "app" {
+  #checkov:skip=CKV_AWS_378:This internal-only ALB terminates traffic inside the VPC and forwards HTTP to private backend instances on the trusted application network.
   name     = "app"
   port     = 4000
   protocol = "HTTP"
@@ -165,7 +212,7 @@ resource "aws_lb_target_group" "app" {
     healthy_threshold   = 2
     interval            = 30
     matcher             = "200"
-    path                = "/health"
+    path                = "/healthz"
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5
@@ -182,6 +229,7 @@ resource "aws_lb_target_group" "app" {
 }
 
 resource "aws_lb_listener" "app" {
+  #checkov:skip=CKV_AWS_103:This listener is internal-only on a private ALB; TLS is terminated at the public edge and intra-VPC traffic remains on the trusted network path.
   load_balancer_arn = aws_lb.app_alb.id
   port              = 80
   protocol          = "HTTP"
@@ -190,52 +238,6 @@ resource "aws_lb_listener" "app" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.id
   }
-}
-
-# App IAM Role
-resource "aws_iam_role" "app_role" {
-  name = "app_role_${terraform.workspace}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_policy" "secrets_policy" {
-  name        = "secrets_policy_${terraform.workspace}"
-  description = "Allow access to secrets manager"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Effect   = "Allow"
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "secrets_attach" {
-  role       = aws_iam_role.app_role.name
-  policy_arn = aws_iam_policy.secrets_policy.arn
-}
-
-resource "aws_iam_instance_profile" "app_profile" {
-  name = "app_profile_${terraform.workspace}"
-  role = aws_iam_role.app_role.name
 }
 
 resource "aws_launch_template" "app" {

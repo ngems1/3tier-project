@@ -209,6 +209,12 @@ variable "sns_topic_arn" {
   type        = string
 }
 
+variable "log_retention_days" {
+  description = "Retention (days) for the CloudWatch Log Groups used by the web/app tiers"
+  type        = number
+  default     = 14
+}
+
 variable "secret_username" {
   description = "Username for the secret"
   type        = string
