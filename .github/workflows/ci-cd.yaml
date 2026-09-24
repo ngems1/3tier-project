@@ -77,7 +77,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Trivy IaC misconfiguration scan
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -91,7 +91,7 @@ jobs:
         run: docker build -t three-tier-frontend:ci application_code/web_files
 
       - name: Trivy backend image scan
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: three-tier-backend:ci
@@ -100,7 +100,7 @@ jobs:
           exit-code: '1'
 
       - name: Trivy frontend image scan
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: three-tier-frontend:ci
