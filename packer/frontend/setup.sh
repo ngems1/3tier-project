@@ -1,30 +1,16 @@
 #!/bin/bash
 set -e
 
-echo '📦 Updating system packages'
+echo '📦 Updating system and installing Docker'
 sudo dnf update -y
+sudo dnf install -y docker amazon-cloudwatch-agent
 
-echo '📦 Installing nginx and git'
-sudo dnf install -y nginx git
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker ec2-user
 
-sudo systemctl enable nginx
-sudo systemctl start nginx
-
-echo '📦 Installing NVM (Node Version Manager)'
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-echo '📦 Installing Node.js v22 via NVM'
-nvm install 22
-
-echo '📦 Verifying Node.js installation'
-node -v
-npm -v
-
-echo '📦 Installing Amazon CloudWatch Agent'
-sudo dnf install -y amazon-cloudwatch-agent
+echo '📦 Verifying installations'
+docker --version
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -help >/dev/null
 
-echo '✅ Frontend AMI preparation complete!'
+echo '✅ Frontend Docker AMI preparation complete!'

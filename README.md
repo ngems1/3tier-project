@@ -1,9 +1,9 @@
 # 3-Tier Application on AWS EC2
 
 A production-style, highly-available 3-tier web application (Web / App / Database) deployed on
-AWS EC2 using immutable AMIs (Packer), Auto Scaling Groups behind Application Load Balancers,
-Amazon RDS (MySQL), and a fully automated GitHub Actions CI/CD pipeline provisioning
-infrastructure with Terraform.
+AWS EC2 using immutable Docker-ready AMIs (Packer), Auto Scaling Groups behind Application Load
+Balancers, Amazon ECR-hosted container images, Amazon RDS (MySQL), and a fully automated GitHub
+Actions CI/CD pipeline provisioning infrastructure with Terraform.
 
 ## Architecture
 
@@ -18,7 +18,7 @@ infrastructure with Terraform.
                                       │
                      ┌────────────────▼────────────────┐
                      │  Web tier ASG (private subnets)  │
-                     │  Nginx + built React static app  │
+                     │  Dockerized nginx/React frontend │
                      └────────────────┬────────────────┘
                                       │ /api/* proxy
                          ┌────────────▼────────────┐
@@ -27,7 +27,7 @@ infrastructure with Terraform.
                                       │
                      ┌────────────────▼────────────────┐
                      │  App tier ASG (private subnets)  │
-                     │  Node.js/Express API (pm2)       │
+                     │  Dockerized Node.js/Express API  │
                      └────────────────┬────────────────┘
                                       │
                          ┌────────────▼────────────┐
@@ -36,14 +36,18 @@ infrastructure with Terraform.
                          └───────────────────────────┘
 ```
 
-* **Web tier** — Nginx serves the built React app and reverse-proxies `/api/*` to the internal
-  App ALB. Instances live in private subnets behind a public-facing ALB with HTTPS (ACM cert).
-* **App tier** — Node.js/Express REST API, managed by `pm2`, reads DB credentials from AWS
-  Secrets Manager at boot. Instances live in private subnets behind an **internal** ALB.
+* **Web tier** — EC2 instances in the web ASG pull the prebuilt frontend image from Amazon ECR
+  and run it as a Docker container on port `8080`, with nginx inside the container reverse-proxying
+  `/api/*` to the internal App ALB. Instances live in private subnets behind a public-facing ALB
+  with HTTPS (ACM cert).
+* **App tier** — EC2 instances in the app ASG pull the prebuilt backend image from Amazon ECR and
+  run it as a Docker container on port `4000`, passing the existing Secrets Manager metadata via
+  environment variables at boot. Instances live in private subnets behind an **internal** ALB.
 * **Data tier** — Amazon RDS for MySQL in private DB subnets, Multi-AZ, encrypted storage,
   automated backups.
-* **Cross-cutting** — CloudWatch Agent ships nginx/app logs and host metrics (mem/disk) to
-  per-environment log groups; CloudWatch alarms cover ALB health/5XX/latency and RDS
+* **Cross-cutting** — Docker ships container logs to per-environment CloudWatch log groups while
+  the CloudWatch Agent continues to publish host metrics (mem/disk); CloudWatch alarms cover ALB
+  health/5XX/latency and RDS
   CPU/storage/connections; an SNS topic fans out alerts; a bastion host provides SSH access into
   the private subnets.
 
@@ -53,10 +57,10 @@ infrastructure with Terraform.
 |---|---|
 | `application_code/app_files` | Node.js/Express backend (`/healthz`, `/api/transaction`, etc.) |
 | `application_code/web_files` | React frontend (Create React App) |
-| `application_code/nginx.conf` | Nginx config installed onto web-tier instances |
-| `application_code/app.sh`, `web.sh` | Scripts run at instance boot to start/build each tier |
-| `app_user_data.sh`, `web_user_data.sh` | EC2 user-data bootstrap scripts (rendered via Terraform `templatefile()`) |
-| `packer/backend`, `packer/frontend` | Packer templates that bake hardened, dependency-preinstalled AMIs |
+| `application_code/nginx.conf` | Legacy host-level nginx config retained for the older process-based path |
+| `application_code/app.sh`, `web.sh` | Legacy process-based bootstrap scripts retained for local/manual use |
+| `app_user_data.sh`, `web_user_data.sh` | EC2 user-data bootstrap scripts that authenticate to ECR and run the tier containers |
+| `packer/backend`, `packer/frontend` | Packer templates that bake Docker-ready AMIs with the CloudWatch Agent installed |
 | `modules/*` | Terraform modules: `vpc`, `sg`, `alb`, `asg`, `rds`, `route53`, `secrets`, `bastion-server` |
 | `*.tfvars`, `*-apply.sh`, `*-destroy.sh` | Per-environment Terraform variables and apply/destroy helper scripts |
 | `.github/workflows/ci-cd.yaml` | CI/CD pipeline: build/test, lint, security scans, Terraform plan/apply |
@@ -72,7 +76,7 @@ docker compose up --build
 
 This starts:
 * `db` — MySQL 8, seeded from `application_code/appdb.sql`
-* `backend` — Node/Express API on `http://localhost:3000` (`/healthz`, `/api/transaction`)
+* `backend` — Node/Express API on `http://localhost:4000` (`/healthz`, `/api/transaction`)
 * `frontend` — Nginx-served React build on `http://localhost:8080` (proxies `/api/` to `backend`)
 
 Tear down with `docker compose down -v`.
@@ -105,9 +109,11 @@ Each environment has its own tfvars file and apply/destroy helper script:
 | Staging | `staging.tfvars` | `./staging-apply.sh` |
 | Production | `prod.tfvars` | `./prod-apply.sh` (requires interactive confirmation before `apply`) |
 
-Each apply script builds the frontend/backend AMIs with Packer if they don't already exist, then
-runs `terraform init` + `terraform apply -var-file=<env>.tfvars`. State is stored remotely in S3
-with encryption and native state locking (see `backend.tf`).
+Each apply script builds the frontend/backend Docker-ready AMIs with Packer if they don't already
+exist, then runs `terraform init` + `terraform apply -var-file=<env>.tfvars`. Those AMIs do not
+bake application code; instead, the ASG user-data scripts log in to Amazon ECR and start the
+prebuilt frontend/backend containers at instance boot. State is stored remotely in S3 with
+encryption and native state locking (see `backend.tf`).
 
 ```bash
 # Example: deploy the dev environment
@@ -129,18 +135,60 @@ manually (`workflow_dispatch`) to plan/apply a chosen environment (`dev`, `stagi
 1. **Backend build/test/lint** — `npm ci`, `npm test` (node:test), `npm run lint` (ESLint).
 2. **Frontend build/test** — `npm ci`, `npm test`, `npm run build`.
 3. **Terraform fmt/validate** and **Checkov** static analysis of the Terraform modules.
-4. **Security scan** — Trivy application config scan plus Trivy image scans of the built backend/frontend
-   Docker images (catches OS/package vulnerabilities in what actually ships).
+4. **Security scan + image publish** — Trivy application config scan plus Trivy image scans of the
+   built backend/frontend Docker images; on pushes to `main`, the same job then authenticates to
+   AWS via OIDC and pushes both images to Amazon ECR with `${GITHUB_SHA}` and `latest` tags.
 5. **Terraform plan** — produces a plan artifact for the selected environment (requires the prior
    jobs, including the security scan, to pass).
 6. **Terraform apply** — gated behind a GitHub **environment** approval and the `deploy` input,
    authenticates to AWS via GitHub OIDC (no long-lived AWS keys stored in the repo).
 
+## Docker deployment on EC2
+
+### How images get built and pushed
+
+- CI always builds both Docker images and scans them with Trivy.
+- On `push` to `main`, the `security-scan` job also assumes the existing AWS deploy role via
+  GitHub OIDC, logs in to Amazon ECR, and pushes `three-tier-backend` and
+  `three-tier-frontend` tagged as both `${GITHUB_SHA}` and `latest`.
+- Terraform creates the two ECR repositories and enables ECR scan-on-push plus lifecycle cleanup
+  of old images.
+
+### Manual build/push for a first deploy
+
+```bash
+AWS_REGION=ap-south-1
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+aws ecr get-login-password --region "$AWS_REGION" | \
+  docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+docker build -t three-tier-backend:manual application_code/app_files
+docker build -t three-tier-frontend:manual application_code/web_files
+
+docker tag three-tier-backend:manual "$ECR_REGISTRY/three-tier-backend:latest"
+docker tag three-tier-frontend:manual "$ECR_REGISTRY/three-tier-frontend:latest"
+
+docker push "$ECR_REGISTRY/three-tier-backend:latest"
+docker push "$ECR_REGISTRY/three-tier-frontend:latest"
+```
+
+### How the ASGs run the containers
+
+- Packer now builds `three-tier-backend-docker` and `three-tier-frontend-docker` AMIs that
+  install Docker and the Amazon CloudWatch Agent.
+- Terraform launch templates render `app_user_data.sh` and `web_user_data.sh` with the ECR
+  repository URLs and runtime values.
+- At boot, each instance logs in to ECR, pulls the `latest` image for its tier, and starts it with
+  `docker run --restart unless-stopped`. The web tier publishes port `8080`; the app tier publishes
+  port `4000`.
+
 ## Observability
 
 * **Logs** — CloudWatch Log Groups `/three-tier/<environment>/web` and `/three-tier/<environment>/app`
-  receive nginx access/error logs and backend stdout/stderr (via the CloudWatch Agent installed in
-  each Packer AMI and configured by the user-data scripts), with retention controlled by
+  receive frontend/backend container stdout/stderr via Docker's `awslogs` driver, while the
+  CloudWatch Agent on each AMI continues to publish host metrics. Log retention is controlled by
   `log_retention_days` (default 14 days, 90 in `prod.tfvars`).
 * **Metrics/alarms** — ALB target health, 5XX error count, and response time alarms for both the
   web and app tiers; RDS CPU utilization, free storage, and connection count alarms. All alarms
@@ -153,8 +201,9 @@ manually (`workflow_dispatch`) to plan/apply a chosen environment (`dev`, `stagi
 * Only the public web ALB is internet-facing; the app ALB is internal-only, and web/app/db tier
   instances sit in private subnets with no public IPs.
 * IAM is split per tier (`modules/asg/iam.tf`): the app role can only `GetSecretValue` on its own
-  secret ARN (not `*`); the web role has no secrets access at all. Both share a scoped
-  CloudWatch-only policy instead of the broad AWS-managed `CloudWatchAgentServerPolicy`.
+  secret ARN (not `*`); the web role has no secrets access at all. Both roles also have read-only
+  ECR access so instances can pull their container images, and they share a scoped CloudWatch-only
+  policy instead of the broad AWS-managed `CloudWatchAgentServerPolicy`.
   Access is granted via least-privilege IAM instance profiles rather than embedded credentials.
 * DB credentials are stored in AWS Secrets Manager and fetched at boot; local development uses
   the `DB_*` environment variables instead (see `DbConfig.js`).
@@ -174,10 +223,9 @@ manually (`workflow_dispatch`) to plan/apply a chosen environment (`dev`, `stagi
 
 ### Rollback
 
-* **Application-level rollback** — re-run the CI/CD workflow (`workflow_dispatch`) against the
-  previously known-good commit/tag on `main`; the ASG launch template will roll out instances
-  built from the AMIs associated with that commit once rebuilt, or simply redeploy the prior
-  Packer-built AMI IDs recorded in `packer/ami_ids/*.txt`.
+* **Application-level rollback** — re-run the CI/CD workflow against the previously known-good
+  commit/tag so the older frontend/backend images are rebuilt and pushed to ECR, then refresh the
+  ASG instances (or scale out) so new instances pull the known-good image tags.
 * **Infrastructure-level rollback** — use `terraform plan -var-file=<env>.tfvars` against the
   previous commit to review the diff, then `terraform apply` it; state is versioned/locked in the
   S3 backend so concurrent applies are safe.

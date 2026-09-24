@@ -2,8 +2,8 @@
 set -e
 
 export AWS_REGION="us-east-1"
-FRONTEND_AMI_NAME="three-tier-frontend"
-BACKEND_AMI_NAME="three-tier-backend"
+FRONTEND_AMI_NAME="three-tier-frontend-docker"
+BACKEND_AMI_NAME="three-tier-backend-docker"
 
 # Function to check if AMI exists
 check_ami_exists() {

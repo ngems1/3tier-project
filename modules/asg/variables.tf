@@ -38,11 +38,27 @@ variable "app_image_id" {
   type = string
 }
 
-variable "web_user_data_base64" {
+variable "region" {
   type = string
 }
 
-variable "app_user_data_base64" {
+variable "environment" {
+  type = string
+}
+
+variable "project_name" {
+  type = string
+}
+
+variable "secret_name" {
+  type = string
+}
+
+variable "web_ecr_repository_url" {
+  type = string
+}
+
+variable "app_ecr_repository_url" {
   type = string
 }
 

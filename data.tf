@@ -8,7 +8,7 @@ data "aws_ami" "frontend" {
 
   filter {
     name   = "name"
-    values = ["three-tier-frontend"]
+    values = ["three-tier-frontend-docker"]
   }
 
   filter {
@@ -23,7 +23,7 @@ data "aws_ami" "backend" {
 
   filter {
     name   = "name"
-    values = ["three-tier-backend"]
+    values = ["three-tier-backend-docker"]
   }
 
   filter {

@@ -62,7 +62,7 @@ resource "aws_wafv2_web_acl_association" "web" {
 
 resource "aws_lb_target_group" "web" {
   name     = "web"
-  port     = 80
+  port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
@@ -71,7 +71,7 @@ resource "aws_lb_target_group" "web" {
     healthy_threshold   = 2
     interval            = 30
     matcher             = "200"
-    path                = "/"
+    path                = "/healthz"
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5
@@ -126,7 +126,12 @@ resource "aws_launch_template" "web" {
   vpc_security_group_ids = [var.web_sg_id]
   key_name               = var.key_name
 
-  user_data = base64encode(replace(base64decode(var.web_user_data_base64), "__APP_ALB_DNS__", aws_lb.app_alb.dns_name))
+  user_data = base64encode(templatefile("${path.root}/web_user_data.sh", {
+    repository_url = var.web_ecr_repository_url
+    region         = var.region
+    environment    = var.environment
+    app_alb_dns    = aws_lb.app_alb.dns_name
+  }))
 
   monitoring {
     enabled = true
@@ -249,7 +254,13 @@ resource "aws_launch_template" "app" {
   vpc_security_group_ids = [var.app_sg_id]
   key_name               = var.key_name
 
-  user_data = var.app_user_data_base64
+  user_data = base64encode(templatefile("${path.root}/app_user_data.sh", {
+    repository_url = var.app_ecr_repository_url
+    region         = var.region
+    secret_name    = var.secret_name
+    environment    = var.environment
+    project_name   = var.project_name
+  }))
 
   monitoring {
     enabled = true

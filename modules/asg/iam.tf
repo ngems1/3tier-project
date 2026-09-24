@@ -37,7 +37,10 @@ data "aws_iam_policy_document" "cloudwatch_agent" {
       "logs:DescribeLogStreams",
       "logs:DescribeLogGroups",
     ]
-    resources = ["arn:aws:logs:*:*:log-group:/three-tier/${terraform.workspace}/*"]
+    resources = [
+      "arn:aws:logs:*:*:log-group:/three-tier/${terraform.workspace}/*",
+      "arn:aws:logs:*:*:log-group:/three-tier/${terraform.workspace}/*:log-stream:*",
+    ]
   }
 }
 
@@ -81,6 +84,11 @@ resource "aws_iam_role_policy_attachment" "app_cloudwatch_attach" {
   policy_arn = aws_iam_policy.cloudwatch_agent_policy.arn
 }
 
+resource "aws_iam_role_policy_attachment" "app_ecr_readonly_attach" {
+  role       = aws_iam_role.app_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
 resource "aws_iam_instance_profile" "app_profile" {
   name = "app_profile_${terraform.workspace}"
   role = aws_iam_role.app_role.name
@@ -99,6 +107,11 @@ resource "aws_iam_role" "web_role" {
 resource "aws_iam_role_policy_attachment" "web_cloudwatch_attach" {
   role       = aws_iam_role.web_role.name
   policy_arn = aws_iam_policy.cloudwatch_agent_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "web_ecr_readonly_attach" {
+  role       = aws_iam_role.web_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
 resource "aws_iam_instance_profile" "web_profile" {

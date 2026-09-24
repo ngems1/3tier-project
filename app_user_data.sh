@@ -1,58 +1,68 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO_URL="https://github.com/ngems1/3tier-project.git"
-REPO_DIR="/home/ec2-user/3tier-project"
-APP_DIR="$${REPO_DIR}/application_code/app_files"
+REPOSITORY_URL="${repository_url}"
+IMAGE_TAG="latest"
 
 log() {
   echo "[$(date --iso-8601=seconds)] $*"
 }
 
-log "Updating system and installing backend dependencies"
-dnf update -y
-dnf install -y git jq mysql
+get_instance_id() {
+  local token
+  token=$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
 
-if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  dnf install -y nodejs npm
-fi
+  if [ -n "$token" ]; then
+    curl -fsS -H "X-aws-ec2-metadata-token: $token" \
+      "http://169.254.169.254/latest/meta-data/instance-id" || hostname
+  else
+    hostname
+  fi
+}
 
-log "Checking out $${REPO_URL}"
-if [ -d "$${REPO_DIR}/.git" ]; then
-  git -C "$${REPO_DIR}" fetch --depth 1 origin main
-  git -C "$${REPO_DIR}" reset --hard origin/main
-else
-  rm -rf "$${REPO_DIR}"
-  git clone --depth 1 --branch main "$${REPO_URL}" "$${REPO_DIR}"
-fi
-
-if [ -z "${secret_name}" ] || [ -z "${region}" ]; then
-  echo "SECRET_NAME and REGION must be provided by Terraform" >&2
+if [ -z "${secret_name}" ] || [ -z "${region}" ] || [ -z "$REPOSITORY_URL" ]; then
+  echo "repository_url, SECRET_NAME, and REGION must be provided by Terraform" >&2
   exit 1
 fi
 
-log "Writing backend runtime environment"
-cat > /etc/profile.d/app_env.sh <<EOF
-export SECRET_NAME="${secret_name}"
-export REGION="${region}"
-export AWS_REGION="${region}"
-export ENVIRONMENT="${environment}"
-export PROJECT_NAME="${project_name}"
-EOF
-chmod 0644 /etc/profile.d/app_env.sh
+INSTANCE_ID="$(get_instance_id)"
+REGISTRY_HOST="$${REPOSITORY_URL%%/*}"
+IMAGE_URI="$REPOSITORY_URL:$IMAGE_TAG"
 
-log "Installing application files"
-rm -rf /home/ec2-user/app_files
-cp -R "$${APP_DIR}" /home/ec2-user/app_files
-install -o ec2-user -g ec2-user -m 0755 \
-  "$${REPO_DIR}/application_code/app.sh" \
-  /home/ec2-user/app.sh
-chown -R ec2-user:ec2-user /home/ec2-user/app_files
-chmod -R u=rwX,go=rX /home/ec2-user/app_files
+log "Ensuring Docker is enabled"
+systemctl enable --now docker
 
-log "Configuring CloudWatch Agent (metrics + application logs)"
+log "Authenticating to Amazon ECR"
+aws ecr get-login-password --region "${region}" | \
+  docker login --username AWS --password-stdin "$REGISTRY_HOST"
+
+log "Pulling backend image $IMAGE_URI"
+docker pull "$IMAGE_URI"
+
+docker rm -f three-tier-backend >/dev/null 2>&1 || true
+
+log "Starting backend container"
+docker run -d \
+  --name three-tier-backend \
+  --restart unless-stopped \
+  -p 4000:4000 \
+  --env SECRET_NAME="${secret_name}" \
+  --env REGION="${region}" \
+  --env AWS_REGION="${region}" \
+  --env ENVIRONMENT="${environment}" \
+  --env PROJECT_NAME="${project_name}" \
+  --log-driver=awslogs \
+  --log-opt awslogs-region="${region}" \
+  --log-opt awslogs-group="/three-tier/${environment}/app" \
+  --log-opt awslogs-stream="$INSTANCE_ID/backend" \
+  "$IMAGE_URI"
+
+log "Configuring CloudWatch Agent (host metrics only)"
+# Container stdout/stderr is shipped with Docker's awslogs driver, so the
+# CloudWatch Agent remains responsible for host metrics on the EC2 instance.
 mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWCONFIG
 {
   "agent": {
     "metrics_collection_interval": 60,
@@ -68,27 +78,10 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
       "mem": { "measurement": ["mem_used_percent"] },
       "disk": { "measurement": ["used_percent"], "resources": ["/"] }
     }
-  },
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [
-          {
-            "file_path": "/home/ec2-user/.pm2/logs/three-tier-backend-out.log",
-            "log_group_name": "/three-tier/${environment}/app",
-            "log_stream_name": "{instance_id}/stdout"
-          },
-          {
-            "file_path": "/home/ec2-user/.pm2/logs/three-tier-backend-error.log",
-            "log_group_name": "/three-tier/${environment}/app",
-            "log_stream_name": "{instance_id}/stderr"
-          }
-        ]
-      }
-    }
   }
 }
-EOF
+CWCONFIG
+
 if command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1 || [ -x /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
   /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
     -a fetch-config -m ec2 -s \
@@ -97,6 +90,4 @@ else
   log "CloudWatch Agent binary not found; skipping agent start (expected only outside the packer-built AMI)"
 fi
 
-log "Starting backend"
-/home/ec2-user/app.sh
 log "Backend bootstrap completed"

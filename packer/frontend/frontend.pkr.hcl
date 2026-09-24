@@ -13,8 +13,8 @@ variable "aws_region" {
 
 source "amazon-ebs" "frontend" {
   region          = var.aws_region
-  ami_name        = "three-tier-frontend"
-  ami_description = "Custom frontend AMI with nginx + git + Node.js 22 (Amazon Linux 2023)"
+  ami_name        = "three-tier-frontend-docker"
+  ami_description = "Custom frontend AMI with Docker + CloudWatch Agent (Amazon Linux 2023)"
   
   instance_type = "t3.micro"
   ssh_username  = "ec2-user"
@@ -32,7 +32,7 @@ source "amazon-ebs" "frontend" {
   }
 
   tags = {
-    Name    = "three-tier-frontend"
+    Name    = "three-tier-frontend-docker"
     Project = "three-tier"
     Tier    = "frontend"
   }

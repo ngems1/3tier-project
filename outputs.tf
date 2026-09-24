@@ -14,3 +14,11 @@ output "bastion_public_ip" {
   value = module.bastion.bastion_public_ip
 }
 
+
+output "backend_ecr_repository_url" {
+  value = module.ecr.backend_repository_url
+}
+
+output "frontend_ecr_repository_url" {
+  value = module.ecr.frontend_repository_url
+}

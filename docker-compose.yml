@@ -44,6 +44,8 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    environment:
+      APP_ALB_DNS: backend:4000
     depends_on:
       - backend
 

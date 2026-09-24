@@ -64,6 +64,13 @@ module "secrets" {
 
 
 
+module "ecr" {
+  source = "./modules/ecr"
+
+  project_name = "vpc-alb"
+}
+
+
 module "asg" {
   source = "./modules/asg"
 
@@ -94,15 +101,13 @@ module "asg" {
   app_image_id      = data.aws_ami.backend.id
   web_instance_type = var.web_instance_type
   app_instance_type = var.app_instance_type
-  web_user_data_base64 = base64encode(templatefile("web_user_data.sh", {
-    environment = terraform.workspace
-  }))
-  app_user_data_base64 = base64encode(templatefile("app_user_data.sh", {
-    region       = var.region
-    secret_name  = module.secrets.secret_name
-    environment  = terraform.workspace
-    project_name = "vpc-alb"
-  }))
+
+  region                 = var.region
+  environment            = terraform.workspace
+  project_name           = "vpc-alb"
+  secret_name            = module.secrets.secret_name
+  web_ecr_repository_url = module.ecr.frontend_repository_url
+  app_ecr_repository_url = module.ecr.backend_repository_url
 
   secret_arn    = module.secrets.secret_arn
   sns_topic_arn = var.sns_topic_arn
