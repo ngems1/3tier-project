@@ -23,4 +23,8 @@ echo '📦 Verifying Node.js installation'
 node -v
 npm -v
 
+echo '📦 Installing Amazon CloudWatch Agent'
+sudo dnf install -y amazon-cloudwatch-agent
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -help >/dev/null
+
 echo '✅ Frontend AMI preparation complete!'

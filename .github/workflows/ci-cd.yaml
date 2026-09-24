@@ -12,7 +12,7 @@ on:
         required: true
         default: dev
         type: choice
-        options: [dev, staging]
+        options: [dev, staging, prod]
       deploy:
         description: Apply infrastructure after validation
         required: true

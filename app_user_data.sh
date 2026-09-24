@@ -50,6 +50,53 @@ install -o ec2-user -g ec2-user -m 0755 \
 chown -R ec2-user:ec2-user /home/ec2-user/app_files
 chmod -R u=rwX,go=rX /home/ec2-user/app_files
 
+log "Configuring CloudWatch Agent (metrics + application logs)"
+mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "run_as_user": "root"
+  },
+  "metrics": {
+    "namespace": "ThreeTier/${environment}",
+    "append_dimensions": {
+      "AutoScalingGroupName": "$${aws:AutoScalingGroupName}",
+      "InstanceId": "$${aws:InstanceId}"
+    },
+    "metrics_collected": {
+      "mem": { "measurement": ["mem_used_percent"] },
+      "disk": { "measurement": ["used_percent"], "resources": ["/"] }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/home/ec2-user/.pm2/logs/three-tier-backend-out.log",
+            "log_group_name": "/three-tier/${environment}/app",
+            "log_stream_name": "{instance_id}/stdout"
+          },
+          {
+            "file_path": "/home/ec2-user/.pm2/logs/three-tier-backend-error.log",
+            "log_group_name": "/three-tier/${environment}/app",
+            "log_stream_name": "{instance_id}/stderr"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+if command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1 || [ -x /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
+  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config -m ec2 -s \
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+else
+  log "CloudWatch Agent binary not found; skipping agent start (expected only outside the packer-built AMI)"
+fi
+
 log "Starting backend"
 /home/ec2-user/app.sh
 log "Backend bootstrap completed"
