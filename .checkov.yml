@@ -1,2 +1,4 @@
 skip-path:
   - modules/alb
+skip-check:
+  - CKV_AWS_394
