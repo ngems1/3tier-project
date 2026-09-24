@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/ngems1/3tier-project.git"
 REPO_DIR="/home/ec2-user/3tier-project"
-APP_DIR="${REPO_DIR}/application_code/app_files"
+APP_DIR="$${REPO_DIR}/application_code/app_files"
 
 log() {
   echo "[$(date --iso-8601=seconds)] $*"
@@ -17,13 +17,13 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   dnf install -y nodejs npm
 fi
 
-log "Checking out ${REPO_URL}"
-if [ -d "${REPO_DIR}/.git" ]; then
-  git -C "${REPO_DIR}" fetch --depth 1 origin main
-  git -C "${REPO_DIR}" reset --hard origin/main
+log "Checking out $${REPO_URL}"
+if [ -d "$${REPO_DIR}/.git" ]; then
+  git -C "$${REPO_DIR}" fetch --depth 1 origin main
+  git -C "$${REPO_DIR}" reset --hard origin/main
 else
-  rm -rf "${REPO_DIR}"
-  git clone --depth 1 --branch main "${REPO_URL}" "${REPO_DIR}"
+  rm -rf "$${REPO_DIR}"
+  git clone --depth 1 --branch main "$${REPO_URL}" "$${REPO_DIR}"
 fi
 
 if [ -z "${secret_name}" ] || [ -z "${region}" ]; then
@@ -43,9 +43,9 @@ chmod 0644 /etc/profile.d/app_env.sh
 
 log "Installing application files"
 rm -rf /home/ec2-user/app_files
-cp -R "${APP_DIR}" /home/ec2-user/app_files
+cp -R "$${APP_DIR}" /home/ec2-user/app_files
 install -o ec2-user -g ec2-user -m 0755 \
-  "${REPO_DIR}/application_code/app.sh" \
+  "$${REPO_DIR}/application_code/app.sh" \
   /home/ec2-user/app.sh
 chown -R ec2-user:ec2-user /home/ec2-user/app_files
 chmod -R u=rwX,go=rX /home/ec2-user/app_files

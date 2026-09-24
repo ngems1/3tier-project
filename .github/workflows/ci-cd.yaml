@@ -52,6 +52,10 @@ jobs:
         working-directory: application_code/app_files
         run: npm ci
 
+      - name: Backend lint (code-quality)
+        working-directory: application_code/app_files
+        run: npm run lint --if-present
+
       - name: Backend smoke test
         working-directory: application_code/app_files
         run: npm test --if-present
@@ -64,6 +68,45 @@ jobs:
         working-directory: application_code/web_files
         run: |
           npm run build
+
+  security-scan:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy IaC misconfiguration scan
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
+      - name: Build backend image
+        run: docker build -t three-tier-backend:ci application_code/app_files
+
+      - name: Build frontend image
+        run: docker build -t three-tier-frontend:ci application_code/web_files
+
+      - name: Trivy backend image scan
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        with:
+          scan-type: image
+          image-ref: three-tier-backend:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Trivy frontend image scan
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        with:
+          scan-type: image
+          image-ref: three-tier-frontend:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
 
   terraform-checks:
     name: Terraform checks
@@ -96,7 +139,7 @@ jobs:
 
   terraform-plan:
     name: Terraform plan
-    needs: [application-checks, terraform-checks]
+    needs: [application-checks, terraform-checks, security-scan]
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'dev' }}

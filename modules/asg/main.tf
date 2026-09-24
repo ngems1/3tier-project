@@ -90,6 +90,10 @@ resource "aws_launch_template" "web" {
     enabled = true
   }
 
+  iam_instance_profile {
+    name = aws_iam_instance_profile.web_profile.name
+  }
+
   tag_specifications {
     resource_type = "instance"
     tags = {
@@ -190,52 +194,6 @@ resource "aws_lb_listener" "app" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.id
   }
-}
-
-# App IAM Role
-resource "aws_iam_role" "app_role" {
-  name = "app_role_${terraform.workspace}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_policy" "secrets_policy" {
-  name        = "secrets_policy_${terraform.workspace}"
-  description = "Allow access to secrets manager"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Effect   = "Allow"
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "secrets_attach" {
-  role       = aws_iam_role.app_role.name
-  policy_arn = aws_iam_policy.secrets_policy.arn
-}
-
-resource "aws_iam_instance_profile" "app_profile" {
-  name = "app_profile_${terraform.workspace}"
-  role = aws_iam_role.app_role.name
 }
 
 resource "aws_launch_template" "app" {

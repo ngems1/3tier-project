@@ -93,3 +93,21 @@ variable "key_name" {
 variable "certificate_arn" {
   type = string
 }
+
+variable "log_retention_days" {
+  description = "Retention (days) for the CloudWatch Log Groups used by the web/app tiers"
+  type        = number
+  default     = 14
+}
+
+variable "alb_5xx_threshold" {
+  description = "Threshold for ALB target 5XX error count alarms"
+  type        = number
+  default     = 5
+}
+
+variable "alb_response_time_threshold" {
+  description = "Threshold (seconds) for ALB target response time alarms"
+  type        = number
+  default     = 2
+}

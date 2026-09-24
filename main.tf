@@ -46,6 +46,8 @@ module "rds" {
   apply_immediately            = var.apply_immediately
   performance_insights_enabled = var.performance_insights_enabled
 
+  sns_topic_arn = var.sns_topic_arn
+
   depends_on = [module.vpc]
 }
 

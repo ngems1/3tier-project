@@ -77,3 +77,26 @@ variable "apply_immediately" {
 variable "performance_insights_enabled" {
   type = bool
 }
+
+variable "sns_topic_arn" {
+  description = "ARN of the SNS topic to notify for RDS CloudWatch alarms"
+  type        = string
+}
+
+variable "free_storage_space_threshold_bytes" {
+  description = "Threshold (in bytes) below which a low free storage space alarm fires"
+  type        = number
+  default     = 2147483648 # 2 GiB
+}
+
+variable "cpu_utilization_threshold" {
+  description = "Threshold (percentage) above which a high CPU utilization alarm fires"
+  type        = number
+  default     = 80
+}
+
+variable "max_connections_threshold" {
+  description = "Threshold above which a high database connections alarm fires"
+  type        = number
+  default     = 150
+}
