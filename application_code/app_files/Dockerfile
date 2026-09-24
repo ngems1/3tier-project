@@ -10,8 +10,6 @@ RUN npm ci --omit=dev \
 
 COPY . .
 
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
-
 ENV PORT=4000
 EXPOSE 4000
 
