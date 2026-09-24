@@ -140,6 +140,7 @@ resource "aws_security_group" "app_sg" {
 }
 
 resource "aws_security_group" "db_sg" {
+  #checkov:skip=CKV2_AWS_5:Attachment is defined by the root RDS module via vpc_security_group_ids, which Checkov cannot infer from this child module in isolation.
   name        = "db_sg"
   description = "Security Group for DB"
   vpc_id      = var.vpc_id

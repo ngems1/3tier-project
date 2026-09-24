@@ -18,6 +18,48 @@ resource "aws_lb" "web_alb" {
   }
 }
 
+resource "aws_wafv2_web_acl" "web" {
+  name  = "web-alb-${terraform.workspace}"
+  scope = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "web-alb-common-rules-${terraform.workspace}"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "web-alb-${terraform.workspace}"
+    sampled_requests_enabled   = true
+  }
+}
+
+resource "aws_wafv2_web_acl_association" "web" {
+  resource_arn = aws_lb.web_alb.arn
+  web_acl_arn  = aws_wafv2_web_acl.web.arn
+}
+
 resource "aws_lb_target_group" "web" {
   name     = "web"
   port     = 80
@@ -159,6 +201,7 @@ resource "aws_lb" "app_alb" {
 }
 
 resource "aws_lb_target_group" "app" {
+  #checkov:skip=CKV_AWS_378:This internal-only ALB terminates traffic inside the VPC and forwards HTTP to private backend instances on the trusted application network.
   name     = "app"
   port     = 4000
   protocol = "HTTP"
@@ -186,6 +229,7 @@ resource "aws_lb_target_group" "app" {
 }
 
 resource "aws_lb_listener" "app" {
+  #checkov:skip=CKV_AWS_103:This listener is internal-only on a private ALB; TLS is terminated at the public edge and intra-VPC traffic remains on the trusted network path.
   load_balancer_arn = aws_lb.app_alb.id
   port              = 80
   protocol          = "HTTP"

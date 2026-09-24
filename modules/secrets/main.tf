@@ -1,4 +1,5 @@
 resource "aws_secretsmanager_secret" "db_secret" {
+  #checkov:skip=CKV2_AWS_57:Database credential rotation is coordinated with the application deployment and RDS credential change, so automatic single-secret rotation is not enabled in this stack.
   name = var.secret_name
 }
 
