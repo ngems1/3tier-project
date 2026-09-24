@@ -129,7 +129,7 @@ manually (`workflow_dispatch`) to plan/apply a chosen environment (`dev`, `stagi
 1. **Backend build/test/lint** — `npm ci`, `npm test` (node:test), `npm run lint` (ESLint).
 2. **Frontend build/test** — `npm ci`, `npm test`, `npm run build`.
 3. **Terraform fmt/validate** and **Checkov** static analysis of the Terraform modules.
-4. **Security scan** — Trivy IaC/config scan plus Trivy image scans of the built backend/frontend
+4. **Security scan** — Trivy application config scan plus Trivy image scans of the built backend/frontend
    Docker images (catches OS/package vulnerabilities in what actually ships).
 5. **Terraform plan** — produces a plan artifact for the selected environment (requires the prior
    jobs, including the security scan, to pass).
